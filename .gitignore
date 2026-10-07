@@ -1,0 +1,14 @@
+# Antigravity Skills Manager generated files
+skills_config.cfg
+skills_transactions.txt
+skills_archive/
+skills_backup/
+
+# OS and Editor temp files
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.bak
+.vscode/
+.idea/

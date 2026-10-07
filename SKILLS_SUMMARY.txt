@@ -1,0 +1,36 @@
+================================================================================
+                    ANTIGRAVITY SKILLS QUICK REFERENCE (ONE-LINERS)
+================================================================================
+
+[CORE SKILLS - KEEP ACTIVE]
+• context-engineering: Mastery of context window dynamics, attention economics, and agent harness engineering.
+• massgen: Multi-Agent Scaling System and collaborative swarm orchestration for complex tasks.
+• playwright-cli: Token-efficient browser automation and testing skill via Playwright CLI.
+• superpowers: Disciplined software engineering methodology and agentic workflow framework.
+• web-designer: Comprehensive, all-in-one Master Web Designer and Creative Frontend Engineer skill.
+
+[INDIVIDUAL WEB SUB-SKILLS - CAN ARCHIVE (INCLUDED IN WEB-DESIGNER)]
+• awesome-design-md: Plain-text design system specification and DESIGN.md authoring skill (Google Stitch & VoltAgent standard).
+• canvas-design: Create master-level visual art, graphic posters, spatial compositions, and static design pieces in PNG, PDF, SVG, and HTML Canvas.
+• human-centric-web-design: Comprehensive guide and operational runbook for creating human-centric, distinctive, and authentic web designs that avoid generic "AI slop"...
+• image-to-code: Elite website image-first design-to-code skill.
+• taste-skill: The Anti-Slop Frontend Framework for AI Agents (Taste Skill).
+• theme-factory: Toolkit for styling artifacts, documents, slides, reports, web applications, and UI components with curated, professional themes.
+• threejs: Master-level 3D web engineering, WebGL/WebGPU graphics, and spatial interaction skill using Three.js and React Three Fiber (R3F).
+• unique-webapp-design-patterns: Comprehensive architectural reference and operational skill for designing, evaluating, and implementing 20 unique, distinctive, and...
+• web-artifacts-builder: Suite of tools and patterns for creating elaborate, multi-component interactive HTML/React web applications and artifacts using modern...
+• web-design-guidelines: Comprehensive review and audit skill for Web Interface Guidelines compliance.
+
+[ADDITIONAL & CREATIVE SKILLS]
+• algorithmic-art: Creating master-level algorithmic and generative art using p5.js, Canvas API, and WebGL with seeded randomness, mathematical beauty, and...
+
+[GLOBAL BUILT-IN PLUGINS REFERENCE]
+• chrome-devtools-plugin: Browser automation, accessibility audits (a11y-debugging), LCP optimization, and heap profiling.
+• modern-web-guidance-plugin: Best practices for modern web standards, CSS APIs, and Chrome Extensions (Manifest V3).
+• flutter-plugin: Comprehensive Flutter and Dart engineering (unit/widget tests, responsive layout, architecture).
+• firebase-plugin: Firebase backend services (Auth, Firestore, App Hosting, Security Rules, Data Connect).
+• android-cli-plugin: Android virtual device management, SDK commands, and APK testing workflows.
+• google-antigravity-sdk: Native multi-agent orchestration, sidecars, skills creation, and Antigravity IDE guide.
+
+================================================================================
+
