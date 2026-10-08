@@ -307,7 +307,7 @@ if exist "!DISABLED_DIR!\!TARGET!" (
 
 move "!ACTIVE_DIR!\!TARGET!" "!DISABLED_DIR!\" >nul
 if exist "!DISABLED_DIR!\!TARGET!" (
-    echo [SUCCESS] "!TARGET!" is now archived (0 tokens).
+    echo [SUCCESS] "!TARGET!" is now archived [0 tokens].
     call :log_transaction "DISABLE" "Moved '!TARGET!' from active to archive" "SUCCESS"
 ) else (
     echo [ERROR] Failed to move "!TARGET!".
@@ -406,7 +406,7 @@ for %%S in (%SUBSKILLS%) do (
 )
 echo.
 echo ==============================================================================
-echo [DONE] Core skills retained. (!moved_count! sub-skills archived to save tokens)
+echo [DONE] Core skills retained. [!moved_count! sub-skills archived to save tokens]
 echo ==============================================================================
 pause
 goto :menu
@@ -437,7 +437,7 @@ for /d %%D in ("!DISABLED_DIR!\*") do (
 echo.
 echo ==============================================================================
 if !count!==0 echo No archived skills found.
-echo [DONE] All skills moved to Active folder. (!count! activated)
+echo [DONE] All skills moved to Active folder. [!count! activated]
 echo ==============================================================================
 pause
 goto :menu
@@ -476,7 +476,7 @@ goto :menu
 :generate_summary
 cls
 echo ==============================================================================
-echo              AUTO-GENERATE SKILLS SUMMARY (from SKILL.md files)
+echo              AUTO-GENERATE SKILLS SUMMARY [from SKILL.md files]
 echo ==============================================================================
 set "GEN_SCRIPT=%SCRIPT_DIR%generate_summary.bat"
 if exist "%GEN_SCRIPT%" (
