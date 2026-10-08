@@ -7,6 +7,8 @@ set "SCRIPT_DIR=%~dp0"
 set "CONFIG_FILE=%SCRIPT_DIR%skills_config.cfg"
 set "LOG_FILE=%SCRIPT_DIR%skills_transactions.txt"
 set "SUMMARY_FILE=%SCRIPT_DIR%SKILLS_SUMMARY.txt"
+set "HISTORY_FILE=%SCRIPT_DIR%skills_history.json"
+set "HISTORY_ENGINE=%SCRIPT_DIR%skills_history.ps1"
 
 :: Check if configuration exists; if not, trigger first-run setup
 if not exist "%CONFIG_FILE%" goto :first_run_setup
@@ -57,6 +59,10 @@ echo   [5] Enable a Skill               Move: Archived -^> Active
 echo   [6] Optimize Web Sub-Skills      Archive redundant web sub-skills (Save tokens)
 echo   [7] Enable All Skills            Move all archived skills to active
 echo.
+echo   -- [ HISTORY ^& UNDO / REDO ] -----------------------------------------------
+echo   [U] Undo Last Action             Revert previous move/toggle transaction
+echo   [R] Redo Last Action             Re-apply previously undone transaction
+echo.
 echo   -- [ BACKUP ^& LOGS ] -------------------------------------------------------
 echo   [8] Run Backup Utility           Mirror active skills to backup folder
 echo   [9] Open Transaction Log         View last 100 move/copy events in text editor
@@ -67,12 +73,14 @@ echo   [0] Exit Manager
 echo ==============================================================================
 echo.
 set "CHOICE="
-set /p "CHOICE=Select an option [0-9 or C]: "
+set /p "CHOICE=Select an option [0-9, U, R, G, C]: "
 if not defined CHOICE goto :menu
 set "CHOICE=!CHOICE: =!"
 
 if /i "!CHOICE!"=="C" goto :first_run_setup
 if /i "!CHOICE!"=="G" goto :generate_summary
+if /i "!CHOICE!"=="U" goto :undo_action
+if /i "!CHOICE!"=="R" goto :redo_action
 if "!CHOICE!"=="1" goto :list_skills
 if "!CHOICE!"=="2" goto :inspect_skill
 if "!CHOICE!"=="3" goto :view_summary
@@ -84,6 +92,36 @@ if "!CHOICE!"=="8" goto :backup_skills
 if "!CHOICE!"=="9" goto :view_log
 if "!CHOICE!"=="0" exit /b
 if "!CHOICE!"=="10" exit /b
+goto :menu
+
+:undo_action
+cls
+echo ==============================================================================
+echo                         UNDO LAST TRANSACTION
+echo ==============================================================================
+if exist "%HISTORY_ENGINE%" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Undo -ActiveDir "!ACTIVE_DIR!" -DisabledDir "!DISABLED_DIR!" -LogFile "!LOG_FILE!" -HistoryFile "!HISTORY_FILE!" <nul
+) else (
+    echo [ERROR] History engine not found: %HISTORY_ENGINE%
+)
+echo.
+echo ==============================================================================
+pause
+goto :menu
+
+:redo_action
+cls
+echo ==============================================================================
+echo                         REDO LAST TRANSACTION
+echo ==============================================================================
+if exist "%HISTORY_ENGINE%" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Redo -ActiveDir "!ACTIVE_DIR!" -DisabledDir "!DISABLED_DIR!" -LogFile "!LOG_FILE!" -HistoryFile "!HISTORY_FILE!" <nul
+) else (
+    echo [ERROR] History engine not found: %HISTORY_ENGINE%
+)
+echo.
+echo ==============================================================================
+pause
 goto :menu
 
 :first_run_setup
@@ -309,6 +347,7 @@ move "!ACTIVE_DIR!\!TARGET!" "!DISABLED_DIR!\" >nul
 if exist "!DISABLED_DIR!\!TARGET!" (
     echo [SUCCESS] "!TARGET!" is now archived [0 tokens].
     call :log_transaction "DISABLE" "Moved '!TARGET!' from active to archive" "SUCCESS"
+    if exist "%HISTORY_ENGINE%" powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Record -Type "DISABLE" -Skills "!TARGET!" -HistoryFile "!HISTORY_FILE!" <nul >nul 2>&1
 ) else (
     echo [ERROR] Failed to move "!TARGET!".
     call :log_transaction "DISABLE" "Failed to move '!TARGET!' from active to archive" "FAILED"
@@ -373,6 +412,7 @@ move "!DISABLED_DIR!\!TARGET!" "!ACTIVE_DIR!\" >nul
 if exist "!ACTIVE_DIR!\!TARGET!" (
     echo [SUCCESS] "!TARGET!" is now active.
     call :log_transaction "ENABLE" "Moved '!TARGET!' from archive to active" "SUCCESS"
+    if exist "%HISTORY_ENGINE%" powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Record -Type "ENABLE" -Skills "!TARGET!" -HistoryFile "!HISTORY_FILE!" <nul >nul 2>&1
 ) else (
     echo [ERROR] Failed to move "!TARGET!".
     call :log_transaction "ENABLE" "Failed to move '!TARGET!' from archive to active" "FAILED"
@@ -390,6 +430,7 @@ echo.
 set "SUBSKILLS=unique-webapp-design-patterns threejs human-centric-web-design taste-skill awesome-design-md theme-factory image-to-code web-artifacts-builder web-design-guidelines canvas-design algorithmic-art ux_ui_research"
 
 set moved_count=0
+set "moved_list="
 for %%S in (%SUBSKILLS%) do (
     if exist "!ACTIVE_DIR!\%%S" (
         if exist "!DISABLED_DIR!\%%S" rd /s /q "!DISABLED_DIR!\%%S"
@@ -398,11 +439,19 @@ for %%S in (%SUBSKILLS%) do (
             echo   [-] Archived: %%S
             call :log_transaction "DISABLE_WEB" "Moved '%%S' from active to archive" "SUCCESS"
             set /a moved_count+=1
+            if defined moved_list (
+                set "moved_list=!moved_list!,%%S"
+            ) else (
+                set "moved_list=%%S"
+            )
         ) else (
             echo   [!] Error moving: %%S
             call :log_transaction "DISABLE_WEB" "Failed moving '%%S' to archive" "FAILED"
         )
     )
+)
+if defined moved_list (
+    if exist "%HISTORY_ENGINE%" powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Record -Type "DISABLE_BATCH" -Skills "!moved_list!" -HistoryFile "!HISTORY_FILE!" <nul >nul 2>&1
 )
 echo.
 echo ==============================================================================
@@ -417,6 +466,7 @@ echo ===========================================================================
 echo                          ACTIVATE ALL ARCHIVED SKILLS
 echo ==============================================================================
 set count=0
+set "activated_list="
 for /d %%D in ("!DISABLED_DIR!\*") do (
     if exist "%%~fD\SKILL.md" (
         set "SKILLNAME=%%~nxD"
@@ -428,11 +478,19 @@ for /d %%D in ("!DISABLED_DIR!\*") do (
             echo   [+] Activated: !SKILLNAME!
             call :log_transaction "ENABLE_ALL" "Moved '!SKILLNAME!' from archive to active" "SUCCESS"
             set /a count+=1
+            if defined activated_list (
+                set "activated_list=!activated_list!,!SKILLNAME!"
+            ) else (
+                set "activated_list=!SKILLNAME!"
+            )
         ) else (
             echo   [!] Error moving: !SKILLNAME!
             call :log_transaction "ENABLE_ALL" "Failed moving '!SKILLNAME!' to active" "FAILED"
         )
     )
+)
+if defined activated_list (
+    if exist "%HISTORY_ENGINE%" powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Record -Type "ENABLE_BATCH" -Skills "!activated_list!" -HistoryFile "!HISTORY_FILE!" <nul >nul 2>&1
 )
 echo.
 echo ==============================================================================
