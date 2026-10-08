@@ -53,19 +53,18 @@ echo   [2] Inspect Skill Details        Look up what any skill does (one-liner)
 echo   [3] Open Summary Guide           Open full SKILLS_SUMMARY.txt in text editor
 echo   [G] Auto-Generate Summary        Rebuild SKILLS_SUMMARY.txt from all SKILL.md files
 echo.
-echo   -- [ TOGGLE ^& OPTIMIZE ] ---------------------------------------------------
+echo   -- [ TOGGLE ^& ACTIVATE ] ---------------------------------------------------
 echo   [4] Disable a Skill              Move: Active   -^> Archived
 echo   [5] Enable a Skill               Move: Archived -^> Active
-echo   [6] Optimize Web Sub-Skills      Archive redundant web sub-skills (Save tokens)
-echo   [7] Enable All Skills            Move all archived skills to active
+echo   [6] Enable All Skills            Move all archived skills to active
 echo.
 echo   -- [ HISTORY ^& UNDO / REDO ] -----------------------------------------------
 echo   [U] Undo Last Action             Revert previous move/toggle transaction
 echo   [R] Redo Last Action             Re-apply previously undone transaction
 echo.
 echo   -- [ BACKUP ^& LOGS ] -------------------------------------------------------
-echo   [8] Run Backup Utility           Mirror active skills to backup folder
-echo   [9] Open Transaction Log         View last 100 move/copy events in text editor
+echo   [7] Run Backup Utility           Mirror active skills to backup folder
+echo   [8] Open Transaction Log         View last 100 move/copy events in text editor
 echo.
 echo   -- [ SETTINGS ^& SYSTEM ] ---------------------------------------------------
 echo   [C] Reconfigure Folder Paths     Change active, archive, or backup locations
@@ -73,7 +72,7 @@ echo   [0] Exit Manager
 echo ==============================================================================
 echo.
 set "CHOICE="
-set /p "CHOICE=Select an option [0-9, U, R, G, C]: "
+set /p "CHOICE=Select an option [0-8, U, R, G, C]: "
 if not defined CHOICE goto :menu
 set "CHOICE=!CHOICE: =!"
 
@@ -86,12 +85,10 @@ if "!CHOICE!"=="2" goto :inspect_skill
 if "!CHOICE!"=="3" goto :view_summary
 if "!CHOICE!"=="4" goto :disable_single
 if "!CHOICE!"=="5" goto :enable_single
-if "!CHOICE!"=="6" goto :disable_web_subskills
-if "!CHOICE!"=="7" goto :enable_all
-if "!CHOICE!"=="8" goto :backup_skills
-if "!CHOICE!"=="9" goto :view_log
+if "!CHOICE!"=="6" goto :enable_all
+if "!CHOICE!"=="7" goto :backup_skills
+if "!CHOICE!"=="8" goto :view_log
 if "!CHOICE!"=="0" exit /b
-if "!CHOICE!"=="10" exit /b
 goto :menu
 
 :undo_action
@@ -417,46 +414,6 @@ if exist "!ACTIVE_DIR!\!TARGET!" (
     echo [ERROR] Failed to move "!TARGET!".
     call :log_transaction "ENABLE" "Failed to move '!TARGET!' from archive to active" "FAILED"
 )
-pause
-goto :menu
-
-:disable_web_subskills
-cls
-echo ==============================================================================
-echo           OPTIMIZE WEB SUB-SKILLS (Retaining Umbrella 'web-designer')
-echo ==============================================================================
-echo Archiving individual web sub-skills to save ~2,000 tokens...
-echo.
-set "SUBSKILLS=unique-webapp-design-patterns threejs human-centric-web-design taste-skill awesome-design-md theme-factory image-to-code web-artifacts-builder web-design-guidelines canvas-design algorithmic-art ux_ui_research"
-
-set moved_count=0
-set "moved_list="
-for %%S in (%SUBSKILLS%) do (
-    if exist "!ACTIVE_DIR!\%%S" (
-        if exist "!DISABLED_DIR!\%%S" rd /s /q "!DISABLED_DIR!\%%S"
-        move "!ACTIVE_DIR!\%%S" "!DISABLED_DIR!\" >nul
-        if exist "!DISABLED_DIR!\%%S" (
-            echo   [-] Archived: %%S
-            call :log_transaction "DISABLE_WEB" "Moved '%%S' from active to archive" "SUCCESS"
-            set /a moved_count+=1
-            if defined moved_list (
-                set "moved_list=!moved_list!,%%S"
-            ) else (
-                set "moved_list=%%S"
-            )
-        ) else (
-            echo   [!] Error moving: %%S
-            call :log_transaction "DISABLE_WEB" "Failed moving '%%S' to archive" "FAILED"
-        )
-    )
-)
-if defined moved_list (
-    if exist "%HISTORY_ENGINE%" powershell -NoProfile -ExecutionPolicy Bypass -File "%HISTORY_ENGINE%" -Action Record -Type "DISABLE_BATCH" -Skills "!moved_list!" -HistoryFile "!HISTORY_FILE!" <nul >nul 2>&1
-)
-echo.
-echo ==============================================================================
-echo [DONE] Core skills retained. [!moved_count! sub-skills archived to save tokens]
-echo ==============================================================================
 pause
 goto :menu
 
