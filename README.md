@@ -1,4 +1,9 @@
-# Antigravity Skills Manager
+<!-- 
+originally made for antigravity, 
+still functional but obsolete for antigravity. for anitgravity see its latest documentation and prefer plugins.
+this may still be useful for managing md files.
+-->
+# Skills Manager
 
 A portable, dependency-free Windows utility for toggling, inspecting, auto-generating summaries, and backing up skills for Google Antigravity and AI coding agents.
 
