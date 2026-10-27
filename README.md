@@ -5,7 +5,7 @@ this may still be useful for managing md files.
 -->
 # Skills Manager
 
-A portable, dependency-free Windows utility for toggling, inspecting, auto-generating summaries, and backing up skills for Google Antigravity and AI coding agents.
+A portable, dependency-free Windows utility for toggling, inspecting, auto-generating summaries, and backing up skills for AI coding agents.
 
 ## Features
 - **Zero Configuration on Download:** On the first run, the script interactively asks for your folder paths and saves them to `skills_config.cfg`.
