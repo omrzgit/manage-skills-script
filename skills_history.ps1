@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory=$true)]
     [ValidateSet("Record", "Undo", "Redo", "Status")]
     [string]$Action,
@@ -11,28 +11,13 @@
     [string]$HistoryFile = ""
 )
 
-# Auto-detect configuration if parameters not passed explicitly
-if (-not $ActiveDir -or -not $DisabledDir -or -not $LogFile) {
-    $cfgPath = Join-Path $PSScriptRoot "skills_config.cfg"
-    if (Test-Path -LiteralPath $cfgPath) {
-        Get-Content -LiteralPath $cfgPath | ForEach-Object {
-            if ($_ -match '^\s*set\s+"?([^=]+)"?\s*=\s*"?([^"]*)"?\s*$') {
-                $k = $matches[1].Trim()
-                $v = $matches[2].Trim()
-                if ($k -eq "ACTIVE_DIR" -and -not $ActiveDir) { $ActiveDir = $v }
-                if ($k -eq "DISABLED_DIR" -and -not $DisabledDir) { $DisabledDir = $v }
-                if ($k -eq "LOG_FILE" -and -not $LogFile) { $LogFile = $v }
-            }
-        }
-    }
-}
-
 if (-not $ActiveDir) {
-    $cand = Join-Path $PSScriptRoot "..\.agents\skills"
-    if (Test-Path -LiteralPath $cand) { $ActiveDir = (Resolve-Path $cand).Path }
+    $cand = Join-Path $PSScriptRoot "active"
+    if (Test-Path -LiteralPath $cand) { $ActiveDir = (Resolve-Path $cand).Path } else { $ActiveDir = $PSScriptRoot }
 }
 if (-not $DisabledDir) {
-    $DisabledDir = Join-Path $PSScriptRoot "skills_archive"
+    $cand = Join-Path $PSScriptRoot "archived"
+    if (Test-Path -LiteralPath $cand) { $DisabledDir = (Resolve-Path $cand).Path } else { $DisabledDir = $PSScriptRoot }
 }
 if (-not $LogFile) {
     $LogFile = Join-Path $PSScriptRoot "skills_transactions.txt"
@@ -47,7 +32,6 @@ function Log-Tx($tag, $msg, $status) {
     $logLine = "[$timeStr] [$tag] $msg [$status]"
     Add-Content -LiteralPath $LogFile -Value $logLine -Encoding UTF8
     
-    # Trim to 100 entries
     if (Test-Path -LiteralPath $LogFile) {
         $lines = Get-Content -LiteralPath $LogFile
         if ($lines.Count -gt 100) {
@@ -62,7 +46,6 @@ function Load-History {
             $raw = Get-Content -LiteralPath $HistoryFile -Raw -Encoding UTF8
             $obj = $raw | ConvertFrom-Json
             if ($obj -and ($null -ne $obj.undoStack) -and ($null -ne $obj.redoStack)) {
-                # Ensure all skills are arrays
                 foreach ($item in $obj.undoStack) { $item.skills = @($item.skills) }
                 foreach ($item in $obj.redoStack) { $item.skills = @($item.skills) }
                 return $obj
@@ -70,26 +53,8 @@ function Load-History {
         } catch { }
     }
     
-    # Fallback seed from skills_transactions.txt if history file doesn't exist yet
-    $undo = @()
-    if (Test-Path -LiteralPath $LogFile) {
-        $txLines = Get-Content -LiteralPath $LogFile -Encoding UTF8
-        foreach ($l in $txLines) {
-            if ($l -match '\[(DISABLE|ENABLE)\] Moved ''([^'']+)''') {
-                $t = $matches[1]
-                $sk = $matches[2]
-                $undo += [PSCustomObject]@{
-                    type = $t
-                    skills = @($sk)
-                    timestamp = ""
-                }
-            }
-        }
-        if ($undo.Count -gt 30) { $undo = $undo[-30..-1] }
-    }
-
     return [PSCustomObject]@{
-        undoStack = [System.Collections.ArrayList]@($undo)
+        undoStack = [System.Collections.ArrayList]@()
         redoStack = [System.Collections.ArrayList]@()
     }
 }
@@ -100,14 +65,10 @@ function Save-History($obj) {
 }
 
 $history = Load-History
-
-# Ensure ArrayList types for easy push/pop
 $undoList = [System.Collections.ArrayList]::new()
 if ($history.undoStack) { foreach ($item in $history.undoStack) { [void]$undoList.Add($item) } }
 $redoList = [System.Collections.ArrayList]::new()
 if ($history.redoStack) { foreach ($item in $history.redoStack) { [void]$redoList.Add($item) } }
-
-$archiveLabel = if ($DisabledDir) { Split-Path $DisabledDir -Leaf } else { "Archive" }
 
 switch ($Action) {
     "Record" {
@@ -120,8 +81,9 @@ switch ($Action) {
             skills = $skillArr
             timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
         }
+        
         [void]$undoList.Add($entry)
-        while ($undoList.Count -gt 50) { $undoList.RemoveAt(0) }
+        if ($undoList.Count -gt 50) { [void]$undoList.RemoveAt(0) }
         $redoList.Clear()
         
         Save-History ([PSCustomObject]@{ undoStack = $undoList; redoStack = $redoList })
@@ -130,177 +92,103 @@ switch ($Action) {
 
     "Undo" {
         if ($undoList.Count -eq 0) {
-            Write-Host "[INFO] Nothing to undo (History is empty)." -ForegroundColor Yellow
+            Write-Host "Nothing to undo." -ForegroundColor Yellow
             exit 0
         }
 
-        $lastIdx = $undoList.Count - 1
-        $tx = $undoList[$lastIdx]
-        $undoList.RemoveAt($lastIdx)
-
-        $targetSkills = @($tx.skills)
-        $successCount = 0
-        $failCount = 0
-
-        # Perform inverse operation
-        if ($tx.type -eq "DISABLE" -or $tx.type -eq "DISABLE_WEB" -or $tx.type -eq "DISABLE_BATCH") {
-            # Was moved from Active -> Disabled. Inverse: move Disabled -> Active
-            Write-Host "Undoing action: Restoring $($targetSkills.Count) skill(s) to Active..." -ForegroundColor Cyan
-            foreach ($sk in $targetSkills) {
-                $src = Join-Path $DisabledDir $sk
-                $dst = Join-Path $ActiveDir $sk
-                if (Test-Path -LiteralPath $src) {
-                    if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction SilentlyContinue }
-                    try {
-                        Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-                        Write-Host "  [+] Restored: $sk -> Active" -ForegroundColor Green
-                        Log-Tx "UNDO" "Restored '$sk' from archive to active" "SUCCESS"
-                        $successCount++
-                    } catch {
-                        Write-Host "  [!] Failed restoring: $sk ($($_.Exception.Message))" -ForegroundColor Red
-                        Log-Tx "UNDO" "Failed restoring '$sk' to active" "FAILED"
-                        $failCount++
+        $lastItem = $undoList[$undoList.Count - 1]
+        [void]$undoList.RemoveAt($undoList.Count - 1)
+        
+        $opType = $lastItem.type
+        $skills = @($lastItem.skills)
+        
+        Write-Host "Undoing transaction: $opType on ($($skills -join ', '))" -ForegroundColor Cyan
+        
+        $successList = @()
+        switch -Regex ($opType) {
+            "DISABLE" {
+                foreach ($s in $skills) {
+                    $src = Join-Path $DisabledDir $s
+                    $dst = Join-Path $ActiveDir $s
+                    if (Test-Path -LiteralPath $src) {
+                        if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                        Move-Item -LiteralPath $src -Destination $dst -Force
+                        $successList += $s
+                        Write-Host "  [+] Restored to Active: $s" -ForegroundColor Green
                     }
-                } else {
-                    Write-Host "  [!] Archived folder missing: $src" -ForegroundColor Red
-                    $failCount++
+                }
+            }
+            "ENABLE" {
+                foreach ($s in $skills) {
+                    $src = Join-Path $ActiveDir $s
+                    $dst = Join-Path $DisabledDir $s
+                    if (Test-Path -LiteralPath $src) {
+                        if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                        Move-Item -LiteralPath $src -Destination $dst -Force
+                        $successList += $s
+                        Write-Host "  [-] Moved back to Archived: $s" -ForegroundColor Yellow
+                    }
                 }
             }
         }
-        elseif ($tx.type -eq "ENABLE" -or $tx.type -eq "ENABLE_ALL" -or $tx.type -eq "ENABLE_BATCH") {
-            # Was moved from Disabled -> Active. Inverse: move Active -> Disabled
-            Write-Host "Undoing action: Archiving $($targetSkills.Count) skill(s)..." -ForegroundColor Cyan
-            foreach ($sk in $targetSkills) {
-                $src = Join-Path $ActiveDir $sk
-                $dst = Join-Path $DisabledDir $sk
-                if (Test-Path -LiteralPath $src) {
-                    if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction SilentlyContinue }
-                    try {
-                        Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-                        Write-Host "  [-] Archived: $sk -> $archiveLabel" -ForegroundColor Green
-                        Log-Tx "UNDO" "Moved '$sk' from active to archive" "SUCCESS"
-                        $successCount++
-                    } catch {
-                        Write-Host "  [!] Failed archiving: $sk ($($_.Exception.Message))" -ForegroundColor Red
-                        Log-Tx "UNDO" "Failed moving '$sk' to archive" "FAILED"
-                        $failCount++
-                    }
-                } else {
-                    Write-Host "  [!] Active folder missing: $src" -ForegroundColor Red
-                    $failCount++
-                }
-            }
+        
+        if ($successList.Count -gt 0) {
+            [void]$redoList.Add($lastItem)
+            Log-Tx "UNDO" "Undid $opType for ($($successList -join ', '))" "SUCCESS"
         }
-
-        # Push to redo stack
-        $tx.skills = $targetSkills
-        [void]$redoList.Add($tx)
-        while ($redoList.Count -gt 50) { $redoList.RemoveAt(0) }
-
+        
         Save-History ([PSCustomObject]@{ undoStack = $undoList; redoStack = $redoList })
-
-        Write-Host ""
-        if ($successCount -gt 0) {
-            Write-Host "[SUCCESS] Undo complete: $successCount skill(s) updated." -ForegroundColor Green
-        } else {
-            Write-Host "[WARNING] Undo finished with 0 modifications." -ForegroundColor Yellow
-        }
         exit 0
     }
 
     "Redo" {
         if ($redoList.Count -eq 0) {
-            Write-Host "[INFO] Nothing to redo (Redo history is empty)." -ForegroundColor Yellow
+            Write-Host "Nothing to redo." -ForegroundColor Yellow
             exit 0
         }
 
-        $lastIdx = $redoList.Count - 1
-        $tx = $redoList[$lastIdx]
-        $redoList.RemoveAt($lastIdx)
-
-        $targetSkills = @($tx.skills)
-        $successCount = 0
-        $failCount = 0
-
-        # Re-apply operation
-        if ($tx.type -eq "DISABLE" -or $tx.type -eq "DISABLE_WEB" -or $tx.type -eq "DISABLE_BATCH") {
-            # Re-apply: Move Active -> Disabled
-            Write-Host "Redoing action: Archiving $($targetSkills.Count) skill(s)..." -ForegroundColor Cyan
-            foreach ($sk in $targetSkills) {
-                $src = Join-Path $ActiveDir $sk
-                $dst = Join-Path $DisabledDir $sk
-                if (Test-Path -LiteralPath $src) {
-                    if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction SilentlyContinue }
-                    try {
-                        Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-                        Write-Host "  [-] Re-archived: $sk -> $archiveLabel" -ForegroundColor Green
-                        Log-Tx "REDO" "Moved '$sk' from active to archive" "SUCCESS"
-                        $successCount++
-                    } catch {
-                        Write-Host "  [!] Failed re-archiving: $sk ($($_.Exception.Message))" -ForegroundColor Red
-                        Log-Tx "REDO" "Failed moving '$sk' to archive" "FAILED"
-                        $failCount++
+        $nextItem = $redoList[$redoList.Count - 1]
+        [void]$redoList.RemoveAt($redoList.Count - 1)
+        
+        $opType = $nextItem.type
+        $skills = @($nextItem.skills)
+        
+        Write-Host "Redoing transaction: $opType on ($($skills -join ', '))" -ForegroundColor Cyan
+        
+        $successList = @()
+        switch -Regex ($opType) {
+            "DISABLE" {
+                foreach ($s in $skills) {
+                    $src = Join-Path $ActiveDir $s
+                    $dst = Join-Path $DisabledDir $s
+                    if (Test-Path -LiteralPath $src) {
+                        if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                        Move-Item -LiteralPath $src -Destination $dst -Force
+                        $successList += $s
+                        Write-Host "  [-] Archived again: $s" -ForegroundColor Yellow
                     }
-                } else {
-                    Write-Host "  [!] Active folder missing: $src" -ForegroundColor Red
-                    $failCount++
+                }
+            }
+            "ENABLE" {
+                foreach ($s in $skills) {
+                    $src = Join-Path $DisabledDir $s
+                    $dst = Join-Path $ActiveDir $s
+                    if (Test-Path -LiteralPath $src) {
+                        if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }
+                        Move-Item -LiteralPath $src -Destination $dst -Force
+                        $successList += $s
+                        Write-Host "  [+] Activated again: $s" -ForegroundColor Green
+                    }
                 }
             }
         }
-        elseif ($tx.type -eq "ENABLE" -or $tx.type -eq "ENABLE_ALL" -or $tx.type -eq "ENABLE_BATCH") {
-            # Re-apply: Move Disabled -> Active
-            Write-Host "Redoing action: Activating $($targetSkills.Count) skill(s)..." -ForegroundColor Cyan
-            foreach ($sk in $targetSkills) {
-                $src = Join-Path $DisabledDir $sk
-                $dst = Join-Path $ActiveDir $sk
-                if (Test-Path -LiteralPath $src) {
-                    if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction SilentlyContinue }
-                    try {
-                        Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop
-                        Write-Host "  [+] Re-activated: $sk -> Active" -ForegroundColor Green
-                        Log-Tx "REDO" "Restored '$sk' from archive to active" "SUCCESS"
-                        $successCount++
-                    } catch {
-                        Write-Host "  [!] Failed re-activating: $sk ($($_.Exception.Message))" -ForegroundColor Red
-                        Log-Tx "REDO" "Failed restoring '$sk' to active" "FAILED"
-                        $failCount++
-                    }
-                } else {
-                    Write-Host "  [!] Archived folder missing: $src" -ForegroundColor Red
-                    $failCount++
-                }
-            }
+        
+        if ($successList.Count -gt 0) {
+            [void]$undoList.Add($nextItem)
+            Log-Tx "REDO" "Redid $opType for ($($successList -join ', '))" "SUCCESS"
         }
-
-        # Push back to undo stack
-        $tx.skills = $targetSkills
-        [void]$undoList.Add($tx)
-        while ($undoList.Count -gt 50) { $undoList.RemoveAt(0) }
-
+        
         Save-History ([PSCustomObject]@{ undoStack = $undoList; redoStack = $redoList })
-
-        Write-Host ""
-        if ($successCount -gt 0) {
-            Write-Host "[SUCCESS] Redo complete: $successCount skill(s) updated." -ForegroundColor Green
-        } else {
-            Write-Host "[WARNING] Redo finished with 0 modifications." -ForegroundColor Yellow
-        }
-        exit 0
-    }
-
-    "Status" {
-        $uCount = $undoList.Count
-        $rCount = $redoList.Count
-        $lastUndo = if ($uCount -gt 0) {
-            $lastItem = $undoList[-1]
-            "$($lastItem.type): $(@($lastItem.skills) -join ', ')"
-        } else { "None" }
-        $lastRedo = if ($rCount -gt 0) {
-            $lastItem = $redoList[-1]
-            "$($lastItem.type): $(@($lastItem.skills) -join ', ')"
-        } else { "None" }
-        Write-Host "Undo available: $uCount (Last: $lastUndo)"
-        Write-Host "Redo available: $rCount (Last: $lastRedo)"
         exit 0
     }
 }

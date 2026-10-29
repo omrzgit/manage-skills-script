@@ -2,28 +2,14 @@
 setlocal EnableDelayedExpansion
 
 title Antigravity Skills Backup Utility
-
 set "SCRIPT_DIR=%~dp0"
-set "CONFIG_FILE=%SCRIPT_DIR%skills_config.cfg"
+set "SOURCE=%SCRIPT_DIR%active"
+set "DEST=%SCRIPT_DIR%BACKUP"
 set "LOG_FILE=%SCRIPT_DIR%skills_transactions.txt"
 
-if not exist "%CONFIG_FILE%" (
-    echo ==============================================================================
-    echo [ERROR] Configuration file not found: %CONFIG_FILE%
-    echo Please run 'manage_skills.bat' first to configure your folder paths.
-    echo ==============================================================================
-    if not "%~1"=="nopause" pause
-    exit /b 1
-)
-
-for /f "usebackq eol=: delims=" %%L in ("%CONFIG_FILE%") do %%L
-
-set "SOURCE=!ACTIVE_DIR!"
-set "DEST=!BACKUP_DIR!"
-
-echo ==============================================================================
-echo                     ANTIGRAVITY SKILLS BACKUP UTILITY
-echo ==============================================================================
+echo ======================================================================
+echo                  ANTIGRAVITY SKILLS BACKUP UTILITY
+echo ======================================================================
 echo Source     : "%SOURCE%"
 echo Destination: "%DEST%"
 echo Log File   : "%LOG_FILE%"
@@ -46,11 +32,11 @@ robocopy "%SOURCE%" "%DEST%" /E /R:1 /W:1 /NP /NDL
 
 if %ERRORLEVEL% LEQ 7 (
     echo.
-    echo ==============================================================================
+    echo ======================================================================
     echo [SUCCESS] Backup completed successfully to:
     echo "%DEST%"
-    echo ==============================================================================
-    call :log_transaction "BACKUP" "Mirrored active skills to backup folder via robocopy" "SUCCESS"
+    echo ======================================================================
+    call :log_transaction "BACKUP" "Mirrored active skills to BACKUP via robocopy" "SUCCESS"
 ) else (
     echo.
     echo [ERROR] Robocopy encountered an error with exit code %ERRORLEVEL%.

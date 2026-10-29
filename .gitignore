@@ -1,15 +1,27 @@
-﻿# Antigravity Skills Manager generated files
-skills_config.cfg
+# Local runtime skills (users bring their own skills)
+active/
+archived/
+BACKUP/
+
+# Local state & logs
 skills_transactions.txt
 skills_history.json
-skills_archive/
-skills_backup/
+TARGET
+*.log
+*.lnk
 
-# OS and Editor temp files
+# Windows / OS artifacts
 Thumbs.db
+ehthumbs.db
 Desktop.ini
-.DS_Store
-*.tmp
-*.bak
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Editor & IDE configs
 .vscode/
 .idea/
+*.swp
+*.swo
